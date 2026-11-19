@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+{% block title %}Reads at {{ chrom }}:{{ pos }}{% endblock %}
+{% block content %}
+<div class="mb-2">
+  <a class="small" href="{{ url_for('workflows.variant_check', run_id=run.run_id, q=chrom ~ ':' ~ pos ~ ' ' ~ ref ~ '>' ~ alt) }}">‹ back to the variant check</a>
+  <h1 class="h4 mb-1">Reads at <code>{{ chrom }}:{{ pos }}</code> {{ ref[:20] }}&gt;{{ alt[:20] }}</h1>
+  <div class="small text-secondary">Run <a href="{{ url_for('workflows.detail', run_id=run.run_id) }}">{{ run.run_id }}</a> ·
+    baseline {{ s.baseline.label }} · ours {{ s.query.label }}</div>
+</div>
+
+{% if row %}
+<div class="card card-body small mb-3">
+  <div><strong>Status:</strong> <code>{{ row.STATUS }}</code></div>
+  <div><strong>Baseline:</strong> GT {{ row.B_GT }} · QUAL {{ row.B_QUAL }} · DP {{ row.B_DP }} · AD {{ row.B_AD_REF }},{{ row.B_AD_ALT }} · GQ {{ row.B_GQ }} · MQ {{ row.B_MQ or '—' }} · FILTER {{ row.B_FILTER }}</div>
+  <div><strong>Ours:</strong> {% if row.Q_GT %}GT {{ row.Q_GT }} · QUAL {{ row.Q_QUAL }} · DP {{ row.Q_DP }} · AD {{ row.Q_AD_REF }},{{ row.Q_AD_ALT }} · GQ {{ row.Q_GQ }} · MQ {{ row.Q_MQ or '—' }} · FILTER {{ row.Q_FILTER }}{% else %}no record in our VCF{% endif %}</div>
+</div>
+{% endif %}
+
+<form class="row g-2 small mb-3" method="get">
+  {% for k in ('chrom','pos','ref','alt') %}<input type="hidden" name="{{ k }}" value="{{ {'chrom':chrom,'pos':pos,'ref':ref,'alt':alt}[k] }}">{% endfor %}
+  <div class="col-md-6"><label class="form-label mb-0">BAM</label>
+    <select class="form-select form-select-sm" name="bam_id">
+      {% for f in bams %}<option value="{{ f.id }}" {% if bam and f.id == bam.id %}selected{% endif %}>{{ f.label or f.path }}{% if default_bam and f.id == default_bam.id %} — produced our VCF{% endif %}</option>{% endfor %}
+    </select></div>
+  <div class="col-md-2"><label class="form-label mb-0">usable if MAPQ ≥</label><input class="form-control form-control-sm" name="min_mq" value="{{ min_mq }}"></div>
+  <div class="col-md-2"><label class="form-label mb-0">and base quality ≥</label><input class="form-control form-control-sm" name="min_bq" value="{{ min_bq }}"></div>
+  <div class="col-md-2 d-flex align-items-end"><button class="btn btn-primary btn-sm w-100">Inspect</button></div>
+</form>
+
+{% if not bam %}<div class="alert alert-warning small">No BAM selected (our VCF is not from a pipeline run that has a registered BAM). Choose one above.</div>{% endif %}
+{% if error %}<div class="alert alert-danger small">{{ error }}</div>{% endif %}
+
+{% if result %}
+<div class="alert alert-info small">
+  <div class="fw-semibold mb-1">Likely reason(s)</div>
+  <ul class="mb-0">{% for r in result.reasons %}<li>{{ r }}</li>{% endfor %}</ul>
+</div>
+<div class="row g-3 small">
+  <div class="col-md-4"><div class="card card-body">
+    <div class="fw-semibold">Reads</div>
+    <div>{{ result.reads }} reads cover the position{% if result.truncated %} (first {{ result.reads }} only){% endif %};
+      {{ result.duplicates_or_qcfail }} duplicate / QC-fail.</div>
+    <div class="mt-1">All usable reads: {% for a, n in result.alleles_all.items() %}<span class="badge text-bg-light border">{{ a }} {{ n }}</span> {% endfor %}</div>
+    <div class="mt-1">With MAPQ ≥ {{ result.min_mq }} and BQ ≥ {{ result.min_bq }} (what callers use):
+      {% for a, n in result.alleles_good.items() %}<span class="badge text-bg-light border">{{ a }} {{ n }}</span> {% else %}<span class="text-danger fw-semibold">none</span>{% endfor %}</div>
+    {% if result.alt_strand %}<div class="mt-1">Usable ALT reads by strand: {{ result.alt_strand }}</div>{% endif %}
+  </div></div>
+  <div class="col-md-4"><div class="card card-body">
+    <div class="fw-semibold">Mapping quality (MAPQ)</div>
+    <table class="table table-sm mb-0"><thead><tr><th>MAPQ</th><th>all reads</th><th>ALT reads</th></tr></thead>
+      <tbody>{% for b, n in result.mapq_bins %}<tr><td>{{ b }}</td><td>{{ n }}</td><td>{{ result.alt_mapq_bins[loop.index0][1] }}</td></tr>{% endfor %}</tbody></table>
+    <div class="form-text">MAPQ 0 = the read fits equally well in another place, so its position is unknown.</div>
+  </div></div>
+  <div class="col-md-4"><div class="card card-body">
+    <div class="fw-semibold">Where else the reads align (BWA XA tag)</div>
+    {% for c, n in result.xa_contigs %}<div><code>{{ c }}</code> — {{ n }} reads</div>{% else %}<div class="text-secondary">No alternative alignments reported.</div>{% endfor %}
+    <div class="form-text">A contig such as <code>chr11_KI270721v1_random</code> or a paralogous gene that repeats this sequence gives reads two equally good places.</div>
+  </div></div>
+</div>
+<details class="mt-3 small"><summary>First {{ result.examples|length }} reads</summary>
+  <table class="table table-sm"><thead><tr><th>MAPQ</th><th>allele</th><th>BQ</th><th>dup</th><th>strand</th><th>NM</th><th>AS</th><th>XS</th><th>XA contigs</th></tr></thead>
+  <tbody>{% for r in result.examples %}<tr><td>{{ r.mapq }}</td><td>{{ r.allele }}</td><td>{{ r.bq }}</td><td>{{ 'yes' if r.dup }}</td><td>{{ '−' if r.reverse else '+' }}</td><td>{{ r.nm }}</td><td>{{ r.as }}</td><td>{{ r.xs }}</td><td>{{ r.xa|join(', ') }}</td></tr>{% endfor %}</tbody></table>
+  <div class="form-text">AS = this alignment's score, XS = best other score. AS = XS means equally good elsewhere.</div>
+</details>
+<div class="small text-secondary mt-2">BAM: <code class="text-break">{{ result.bam }}</code> (read-only)</div>
+{% endif %}
+{% endblock %}

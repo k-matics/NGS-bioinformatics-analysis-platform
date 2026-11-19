@@ -1,0 +1,31 @@
+{% extends "base.html" %}
+{% block title %}New sample{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3">New sample</h1>
+<div class="card" style="max-width: 640px">
+  <div class="card-body">
+    <form method="post">
+      <div class="mb-3">
+        <label class="form-label">Sample ID</label>
+        <input class="form-control" name="sample_id" required maxlength="64" pattern="[A-Za-z0-9][A-Za-z0-9_.\-]{0,63}" placeholder="e.g. SAMPLE_A">
+        <div class="form-text">Letters, digits, <code>_ - .</code> only. Used in folder names, so it must be file-system safe.</div>
+      </div>
+      <div class="row">
+        <div class="col mb-3">
+          <label class="form-label">Sequencing type</label>
+          <select class="form-select" name="sequencing_type">{% for t in seq_types %}<option>{{ t }}</option>{% endfor %}</select>
+        </div>
+        <div class="col mb-3">
+          <label class="form-label">Library layout</label>
+          <select class="form-select" name="library_layout"><option value="paired">Paired-end</option><option value="single">Single-end</option></select>
+        </div>
+      </div>
+      <div class="mb-3">
+        <label class="form-label">Description / notes</label>
+        <textarea class="form-control" name="description" rows="3"></textarea>
+      </div>
+      <button class="btn btn-primary">Create sample</button>
+    </form>
+  </div>
+</div>
+{% endblock %}

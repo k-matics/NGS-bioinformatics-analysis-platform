@@ -1,0 +1,50 @@
+{% macro status_badge(status) -%}
+  <span class="badge text-bg-{{ STATUS_BADGE.get(status, 'secondary') }} status-badge" data-status="{{ status }}">{{ status|upper }}</span>
+{%- endmacro %}
+
+{% macro validation_badge(status) -%}
+  {% set map = {'ok': 'success', 'warning': 'warning', 'error': 'danger', 'unchecked': 'secondary'} %}
+  <span class="badge text-bg-{{ map.get(status or 'unchecked', 'secondary') }}">{{ (status or 'unchecked')|upper }}</span>
+{%- endmacro %}
+
+{% macro progress_bar(pct, status) -%}
+  <div class="progress" role="progressbar" style="height: 1.1rem">
+    <div class="progress-bar {% if status == 'running' %}progress-bar-striped progress-bar-animated{% endif %} bg-{{ STATUS_BADGE.get(status, 'primary') }}"
+         style="width: {{ pct }}%">{{ pct }}%</div>
+  </div>
+{%- endmacro %}
+
+{% macro param_input(spec, name, disabled_reasons=None) %}
+  {% set fid = name|replace('.', '_') %}
+  {% if spec.type == 'bool' %}
+    <div class="form-check">
+      <input class="form-check-input" type="checkbox" name="{{ name }}" id="{{ fid }}" {% if spec.default %}checked{% endif %}>
+      <label class="form-check-label" for="{{ fid }}">{{ spec.label }}</label>
+      {% if spec.help %}<div class="form-text mt-0">{{ spec.help }}</div>{% endif %}
+    </div>
+  {% elif spec.type == 'choice' %}
+    <label class="form-label small mb-0" for="{{ fid }}">{{ spec.label }}</label>
+    <select class="form-select form-select-sm" name="{{ name }}" id="{{ fid }}">
+      {% for v, l in spec.choices %}<option value="{{ v }}" {% if v == spec.default %}selected{% endif %}>{{ l }}</option>{% endfor %}
+    </select>
+    {% if spec.help %}<div class="form-text mt-0">{{ spec.help }}</div>{% endif %}
+  {% elif spec.type == 'multichoice' %}
+    <div class="form-label small mb-1">{{ spec.label }}</div>
+    {% for v, l in spec.choices %}
+      {% set unavailable = 'unavailable' in l %}
+      <div class="form-check">
+        <input class="form-check-input" type="checkbox" name="{{ name }}" value="{{ v }}" id="{{ fid }}_{{ v }}"
+               data-toggle-target="{{ fid }}_{{ v }}_params" {% if v in spec.default and not unavailable %}checked{% endif %} {% if unavailable %}disabled{% endif %}>
+        <label class="form-check-label {% if unavailable %}text-secondary{% endif %}" for="{{ fid }}_{{ v }}">{{ l }}</label>
+      </div>
+    {% endfor %}
+    {% if spec.help %}<div class="form-text mt-0">{{ spec.help }}</div>{% endif %}
+  {% else %}
+    <label class="form-label small mb-0" for="{{ fid }}">{{ spec.label }}</label>
+    <input class="form-control form-control-sm" name="{{ name }}" id="{{ fid }}"
+           {% if spec.type in ('int', 'float') %}type="number" {% if spec.type == 'float' %}step="any"{% endif %}
+             {% if spec.min is not none %}min="{{ spec.min }}"{% endif %} {% if spec.max is not none %}max="{{ spec.max }}"{% endif %}{% endif %}
+           value="{{ spec.default if spec.default is not none else '' }}">
+    {% if spec.help %}<div class="form-text mt-0">{{ spec.help }}</div>{% endif %}
+  {% endif %}
+{% endmacro %}

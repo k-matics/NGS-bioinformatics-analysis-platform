@@ -1,0 +1,86 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import status_badge, progress_bar with context %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+<h1 class="h3 mb-4">Dashboard</h1>
+
+<div class="row g-3 mb-4" id="stat-cards">
+  {% set cards = [
+    ('Samples registered', total_samples, 'people', 'secondary', None),
+    ('Samples processed', samples_processed, 'check2-all', 'success', None),
+    ('Pending / queued', counts['pending'] + counts['queued'], 'hourglass-split', 'info', 'queued'),
+    ('Running', counts['running'] + counts['paused'], 'play-circle', 'primary', 'running'),
+    ('Completed', counts['completed'], 'check-circle', 'success', 'completed'),
+    ('Failed', counts['failed'], 'x-octagon', 'danger', 'failed'),
+    ('Cancelled', counts['cancelled'], 'slash-circle', 'dark', 'cancelled'),
+  ] %}
+  {% for label, value, icon, color, filter in cards %}
+  <div class="col-6 col-md-4 col-xl">
+    <a class="card stat-card h-100 text-decoration-none" href="{{ url_for('workflows.history', status=filter) if filter else url_for('samples.list_samples') }}">
+      <div class="card-body">
+        <div class="text-secondary small"><i class="bi bi-{{ icon }} text-{{ color }}"></i> {{ label }}</div>
+        <div class="fs-3 fw-semibold" data-count="{{ filter or '' }}">{{ value }}</div>
+      </div>
+    </a>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="row g-3">
+  <div class="col-lg-8">
+    <div class="card mb-3">
+      <div class="card-header d-flex justify-content-between">
+        <span><i class="bi bi-activity"></i> Active bioinformatics jobs</span>
+        <span class="small text-secondary">auto-refresh 5 s</span>
+      </div>
+      <div class="card-body p-0">
+        <table class="table table-sm mb-0 align-middle">
+          <thead><tr><th>Run</th><th>Sample</th><th>Workflow</th><th>Status</th><th>Current step</th><th style="width:20%">Progress</th></tr></thead>
+          <tbody id="active-jobs">
+          {% for r in active %}
+            <tr>
+              <td><a href="{{ url_for('workflows.detail', run_id=r.run_id) }}">{{ r.run_id }}</a></td>
+              <td>{{ r.sample.sample_id }}</td><td>{{ r.workflow_type }}</td>
+              <td>{{ status_badge(r.status) }}</td>
+              <td>{{ r.current_step.name if r.current_step else '—' }}</td>
+              <td>{{ progress_bar(r.progress, r.status) }}</td>
+            </tr>
+          {% else %}
+            <tr><td colspan="6" class="text-secondary text-center py-3">No active jobs.</td></tr>
+          {% endfor %}
+          </tbody>
+        </table>
+      </div>
+    </div>
+
+    <div class="card">
+      <div class="card-header"><i class="bi bi-list-ul"></i> Recent activity</div>
+      <ul class="list-group list-group-flush small">
+        {% for e in events %}
+          <li class="list-group-item d-flex gap-3">
+            <span class="text-secondary text-nowrap">{{ e.timestamp|dt }}</span>
+            <a class="text-nowrap" href="{{ url_for('workflows.detail', run_id=e.run.run_id) }}">{{ e.run.run_id }}</a>
+            <span class="{% if e.level == 'ERROR' %}text-danger{% elif e.level == 'WARNING' %}text-warning-emphasis{% endif %}">{{ e.message }}</span>
+          </li>
+        {% else %}
+          <li class="list-group-item text-secondary">No activity yet.</li>
+        {% endfor %}
+      </ul>
+    </div>
+  </div>
+
+  <div class="col-lg-4">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-cpu"></i> Server resources</div>
+      <div class="card-body" id="system-panel"><div class="text-secondary small">Loading…</div></div>
+    </div>
+    {% include "partials/limitations_card.html" %}
+  </div>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  NGS.pollSystem(document.getElementById('system-panel'));
+  NGS.pollDashboard(document.getElementById('active-jobs'));
+</script>
+{% endblock %}

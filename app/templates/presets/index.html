@@ -1,0 +1,59 @@
+{% extends "base.html" %}
+{% block title %}Parameter presets{% endblock %}
+{% block content %}
+<h1 class="h3 mb-1">Parameter presets</h1>
+<p class="text-secondary">A preset is a saved set of workflow parameters. Choose one on a sample's <em>Start a workflow</em>
+form: it fills in the fields, you can still change any of them, and the run records which preset it started from and
+which values you changed.</p>
+
+<div class="card mb-4">
+  <table class="table table-sm mb-0 align-middle">
+    <thead><tr><th>Name</th><th>Origin</th><th>Description</th><th>Sets</th><th></th></tr></thead>
+    <tbody>
+    {% for p in presets %}
+      <tr>
+        <td><a href="{{ url_for('presets.detail', preset_id=p.id) }}">{{ p.name }}</a>{% if p.locked %} <i class="bi bi-lock text-secondary" title="locked"></i>{% endif %}</td>
+        <td><span class="badge text-bg-light border">{{ origins.get(p.origin, p.origin) }}</span></td>
+        <td class="small">{{ p.description or '' }}{% if p.source %}<div class="text-secondary text-break"><code>{{ p.source }}</code></div>{% endif %}</td>
+        <td class="small text-nowrap">{{ (p.params or {})|length }} groups</td>
+        <td><a class="btn btn-sm btn-outline-secondary" href="{{ url_for('presets.download', preset_id=p.id) }}"><i class="bi bi-download"></i></a></td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-funnel"></i> Grab the filtering profile of a VCF</div>
+      <div class="card-body">
+        <p class="small">Reads the VCF's header (caller, command line, every <code>##FILTER</code> rule) and its records
+          (which filters were really applied, and the lowest QUAL/DP/GQ/VAF among PASS calls), then proposes matching
+          values for our per-caller filters. Each value is labelled <em>mapped</em>, <em>approximate</em> or
+          <em>not mappable</em> on the preset's page. The VCF is only read.</p>
+        <form method="post" action="{{ url_for('presets.import_vcf') }}" class="row g-2">
+          <div class="col-12"><label class="form-label small mb-0">VCF path on the server</label>
+            <input class="form-control" name="path" required placeholder="/data/.../provider.vcf.gz"></div>
+          <div class="col-md-6"><label class="form-label small mb-0">Preset name</label>
+            <input class="form-control" name="name" maxlength="80" placeholder="e.g. Provider-like"></div>
+          <div class="col-md-6 d-flex align-items-end"><button class="btn btn-primary w-100"><i class="bi bi-magic"></i> Extract profile &amp; create preset</button></div>
+        </form>
+        <div class="form-text">Allowed folders: {{ data_roots|join(', ') }}</div>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-header"><i class="bi bi-plus-circle"></i> Other ways to create a preset</div>
+      <div class="card-body small">
+        <ul class="mb-0">
+          <li><strong>From the Start form:</strong> set the fields, then use <em>Save as preset</em> under the form.</li>
+          <li><strong>From a finished run:</strong> <em>Save parameters as preset</em> on the run page.</li>
+          <li><strong>Duplicate</strong> an existing preset and edit the copy.</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}

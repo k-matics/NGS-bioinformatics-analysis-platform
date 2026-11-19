@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Run report {{ data.sample }} {{ data.run_id }}</title>
+{% include "reports/_style.html" %}</head>
+<body>
+{% set S = {} %}{% for s in data.steps %}{% set _ = S.update({s.key: s}) %}{% endfor %}
+<h1>{{ data.workflow }} — {{ data.sample }}</h1>
+<p>Run <code>{{ data.run_id }}</code> (workflow v{{ data.workflow_version }}) · generated {{ data.generated_at }}<br>
+Reference <strong>{{ data.reference.name }}</strong> ({{ data.reference.build }}) <code>{{ data.reference.path }}</code></p>
+<p class="note"><strong>Research use only.</strong> These results come from a pipeline under development. Variant calls are
+soft-filtered with caller-specific technical filters only (no clinical interpretation). Producing a VCF is not evidence
+of analytical or clinical validity; validation against truth sets (e.g. GIAB) is a separate, documented process.</p>
+{% include "reports/_limitations.html" %}
+
+<h2>Inputs</h2>
+<table><tr><th>Role</th><th>Path</th><th>SHA-256 (from intake validation)</th></tr>
+{% for f in data.inputs %}<tr><td>{{ f.role }}</td><td><code>{{ f.path }}</code></td><td><code>{{ f.sha256 or 'not yet checksummed — run intake validation' }}</code></td></tr>{% endfor %}
+</table>
+
+{% if data.accounting %}
+<h2>Read accounting</h2>
+<p>Every read is tracked: the numbers below must reconcile, otherwise the run fails.</p>
+<table>{% for label, value in data.accounting %}<tr><td>{{ label }}</td><td class="n">{{ "{:,}".format(value) if value is not none else '—' }}</td></tr>{% endfor %}</table>
+{% endif %}
+
+{% if S.fastp and S.fastp.summary %}{% set f = S.fastp.summary %}
+<h2>Trimming (fastp)</h2>
+<table>
+<tr><th>Q30 before</th><th>Q30 after</th><th>Reads removed</th><th>Adapter-trimmed reads</th><th>GC %</th><th>Duplication (fastp estimate)</th><th>Insert size peak</th></tr>
+<tr><td class="n">{{ f.q30_before_pct }} %</td><td class="n">{{ f.q30_after_pct }} %</td><td class="n">{{ "{:,}".format(f.reads_removed) }} ({{ f.reads_removed_pct }} %)</td>
+<td class="n">{{ "{:,}".format(f.adapter_trimmed_reads) }}</td><td class="n">{{ f.gc_pct }}</td><td class="n">{{ f.duplication_rate_pct }} %</td><td class="n">{{ f.insert_size_peak }}</td></tr>
+</table>
+<details><summary>Removal reasons</summary><pre>{{ f.removal_reasons|tojson(indent=2) }}</pre></details>
+{% endif %}
+
+{% if S.bam_qc and S.bam_qc.summary %}{% set b = S.bam_qc.summary %}
+<h2>Alignment &amp; coverage</h2>
+<table>
+<tr><th>Primary reads</th><th>Mapped</th><th>Properly paired</th><th>Duplicates</th><th>Insert size</th><th>Error rate</th><th>Mean coverage ({{ b.coverage_region }})</th></tr>
+<tr><td class="n">{{ "{:,}".format(b.primary) }}</td><td class="n">{{ b.primary_mapped_pct }} %</td><td class="n">{{ b.properly_paired_pct }} %</td>
+<td class="n">{{ b.duplicate_pct }} %</td><td class="n">{{ b.insert_size_mean }} ± {{ b.insert_size_sd }}</td><td class="n">{{ "%.4f"|format(b.error_rate) }}</td>
+<td class="n">{{ "%.1f"|format(b.mean_target_coverage) if b.mean_target_coverage is defined else '—' }}×</td></tr>
+</table>
+{% if b.pct_target_bases %}
+<table><tr>{% for k in b.pct_target_bases %}<th>≥ {{ k }}</th>{% endfor %}</tr>
+<tr>{% for k, v in b.pct_target_bases.items() %}<td class="n">{{ v }} %</td>{% endfor %}</tr></table>
+<p style="font-size:.8rem">Percentage of target bases covered at each depth (duplicates, QC-fail and MAPQ &lt; {{ data.params.coverage_min_mapq }} reads excluded).</p>
+{% endif %}
+{% endif %}
+
+{% if data.callers %}
+<h2>Variant calls (normalised, before filtering)</h2>
+<table>
+<tr><th>Caller</th><th>Records</th><th>SNVs</th><th>Indels</th><th>MNP/other</th><th>Ti/Tv</th><th>Het</th><th>Hom-alt</th><th>Het/Hom</th></tr>
+{% for c in data.callers %}
+<tr><td>{{ c.caller }}</td><td class="n">{{ "{:,}".format(c.records) }}</td><td class="n">{{ "{:,}".format(c.snvs) }}</td><td class="n">{{ "{:,}".format(c.indels) }}</td>
+<td class="n">{{ c.mnps + c.others }}</td><td class="n">{{ c.ts_tv }}</td><td class="n">{{ c.het }}</td><td class="n">{{ c.hom_alt }}</td><td class="n">{{ c.het_hom_ratio }}</td></tr>
+{% endfor %}
+</table>
+<p style="font-size:.8rem">Counts are per caller and are not a measure of accuracy. A systematic comparison
+(concordance, precision/recall against a truth set) is the purpose of the Caller Comparison module.</p>
+{% for c in data.callers %}<details><summary>{{ c.caller }} parameters</summary><pre>{{ c.params|tojson(indent=2) }}</pre></details>{% endfor %}
+
+{% if data.callers|selectattr('filter')|list %}
+<h2>Filtering (soft filters — records labelled, none removed)</h2>
+<table><tr><th>Caller</th><th>Records</th><th>PASS</th><th>PASS SNVs</th><th>PASS indels</th><th>PASS Ti/Tv</th><th>PASS het / hom-alt</th><th>Filtered by (records can have several labels)</th></tr>
+{% for c in data.callers if c.filter %}{% set f = c.filter %}
+<tr><td>{{ c.caller }}</td><td class="n">{{ "{:,}".format(f.records) }}</td><td class="n">{{ "{:,}".format(f.pass) }} ({{ f.pass_pct }} %)</td>
+<td class="n">{{ "{:,}".format(f.pass_snvs) }}</td><td class="n">{{ "{:,}".format(f.pass_indels) }}</td><td class="n">{{ f.pass_ts_tv }}</td>
+<td class="n">{{ f.pass_het }} / {{ f.pass_hom_alt }}</td><td>{% for k, v in f.filtered_by.items() %}{{ k }}: {{ "{:,}".format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}</td></tr>
+{% endfor %}</table>
+{% for c in data.callers if c.filter %}<details><summary>{{ c.caller }} filter rules</summary><table><tr><th>FILTER</th><th>Meaning</th><th>bcftools expression</th></tr>
+{% for r in c.filter.rules %}<tr><td>{{ r.name }}</td><td>{{ r.description }}</td><td><code>{{ r.expr }}</code></td></tr>{% endfor %}</table></details>{% endfor %}
+{% endif %}
+{% endif %}
+
+{% if data.comparison %}{% set C = data.comparison %}
+<h2>{{ C.title }}</h2>
+<p>{{ "{:,}".format(C.union) }} distinct variants in total ({{ 'PASS only' if C.pass_only else 'all records' }});
+<strong>{{ "{:,}".format(C.in_all) }}</strong> found by all {{ C.sets|length }} sets.</p>
+<table><tr><th>Set A</th><th>Set B</th><th>Shared</th><th>A only</th><th>B only</th><th>Jaccard</th><th>Genotype concordance (shared)</th></tr>
+{% for p in C.pairwise %}<tr><td>{{ p.a }}</td><td>{{ p.b }}</td><td class="n">{{ "{:,}".format(p.shared) }}</td><td class="n">{{ "{:,}".format(p.a_only) }}</td>
+<td class="n">{{ "{:,}".format(p.b_only) }}</td><td class="n">{{ p.jaccard }}</td><td class="n">{{ p.gt_concordance_pct }} %</td></tr>{% endfor %}</table>
+{% endif %}
+{% if data.report_links %}
+<h2>Detailed reports</h2>
+<ul>{% for name, href in data.report_links %}<li><a href="{{ href }}">{{ name }}</a></li>{% endfor %}</ul>
+{% endif %}
+
+<h2>Warnings</h2>
+{% if data.warnings %}<ul>{% for w in data.warnings %}<li class="warning">{{ w }}</li>{% endfor %}</ul>{% else %}<p class="ok">None.</p>{% endif %}
+
+<h2>Steps</h2>
+<table><tr><th>#</th><th>Step</th><th>Status</th><th>Duration</th><th>Message</th></tr>
+{% for s in data.steps %}<tr><td>{{ loop.index }}</td><td>{{ s.name }}</td><td class="{{ 'ok' if s.status in ('completed','skipped') else 'error' }}">{{ s.status }}</td>
+<td class="n">{{ '%.0f s'|format(s.duration) if s.duration is not none else '' }}</td><td>{{ s.message or '' }}</td></tr>{% endfor %}
+</table>
+
+<h2>Provenance</h2>
+<table><tr><th>Tool</th><th>Version</th></tr>{% for t, v in data.tool_versions|dictsort %}<tr><td>{{ t }}</td><td>{{ v }}</td></tr>{% endfor %}</table>
+<details><summary>All parameters</summary><pre>{{ data.params|tojson(indent=2) }}</pre></details>
+<p style="font-size:.8rem">Exact command lines, exit codes and timings: <code>run_manifest.json</code> in the run folder.</p>
+</body></html>

@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Intake report {{ data.sample }} {{ data.run_id }}</title>
+<style>
+  body{font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;margin:2rem;color:#1d2433;max-width:1100px}
+  h1{font-size:1.5rem} h2{font-size:1.15rem;margin-top:2rem;border-bottom:1px solid #dde;padding-bottom:.3rem}
+  table{border-collapse:collapse;width:100%;font-size:.85rem} td,th{border:1px solid #dde;padding:.35rem .5rem;text-align:left;vertical-align:top}
+  th{background:#f3f5f9} code{font-size:.8rem;word-break:break-all}
+  .ok{color:#18794e;font-weight:600}.warning{color:#a15c00;font-weight:600}.error{color:#c62828;font-weight:600}
+  .note{background:#fff8e1;border:1px solid #f0d58a;padding:.6rem .8rem;font-size:.85rem}
+  pre{background:#f6f7f9;padding:.6rem;font-size:.75rem;white-space:pre-wrap}
+</style></head>
+<body>
+<h1>Sample intake validation — {{ data.sample }}</h1>
+<p>Run <code>{{ data.run_id }}</code> · generated {{ data.generated_at }} · reference <strong>{{ data.reference.name }}</strong> ({{ data.reference.build }}) <code>{{ data.reference.path }}</code></p>
+<p class="note">This report establishes technical integrity and genome-build compatibility of the input files only.
+It is not an analytical or clinical validation of any result.</p>
+
+<h2>Input files</h2>
+<table><tr><th>Role</th><th>Origin</th><th>Path</th><th>Size (bytes)</th><th>SHA-256</th><th>Build</th><th>Status</th></tr>
+{% for f in data.files %}
+<tr><td>{{ f.role }}</td><td>{{ f.origin }}</td><td><code>{{ f.path }}</code></td><td>{{ f.size }}</td><td><code>{{ f.sha256 or '' }}</code></td><td>{{ f.build or '' }}</td>
+<td><span class="{{ f.status }}">{{ (f.status or '')|upper }}</span><br>{{ f.message or '' }}</td></tr>
+{% endfor %}</table>
+
+{% for s in data.steps %}
+<h2>{{ s.name }} — <span class="{{ 'ok' if s.status == 'completed' else 'warning' }}">{{ s.status|upper }}</span></h2>
+{% if s.message %}<p>{{ s.message }}</p>{% endif %}
+{% if s.warnings %}<ul>{% for w in s.warnings %}<li class="warning">{{ w }}</li>{% endfor %}</ul>{% endif %}
+{% if s.summary %}<pre>{{ s.summary|tojson(indent=2) }}</pre>{% endif %}
+{% endfor %}
+</body></html>

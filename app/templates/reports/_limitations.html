@@ -1,0 +1,6 @@
+{% set L = data.limitations if data is defined and data.limitations is defined else (limitations or []) %}
+{% if L %}
+<details open><summary><strong>Known limitations ({{ L|length }})</strong> — read before interpreting</summary>
+<ul style="font-size:.85rem">{% for l in L %}<li class="lim-{{ l.severity }}"><strong>{{ l.title }}.</strong> {{ l.text }} <em>({{ l.doc }})</em></li>{% endfor %}</ul>
+</details>
+{% endif %}

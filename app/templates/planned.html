@@ -1,0 +1,11 @@
+{% extends "base.html" %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1 class="h3">{{ title }}</h1>
+<div class="alert alert-info">This module is scheduled for <strong>Phase {{ phase }}</strong>. It is intentionally not shown as working yet.</div>
+<div class="card" style="max-width: 720px">
+  <div class="card-header">Planned functionality</div>
+  <ul class="list-group list-group-flush">{% for i in items %}<li class="list-group-item">{{ i }}</li>{% endfor %}</ul>
+</div>
+<p class="mt-3">Available now: <a href="{{ url_for('samples.list_samples') }}">register samples and run intake validation</a>.</p>
+{% endblock %}

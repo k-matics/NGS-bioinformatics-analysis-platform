@@ -1,0 +1,85 @@
+{% extends "base.html" %}
+{% block title %}{{ p.name }}{% endblock %}
+{% block content %}
+<div class="d-flex justify-content-between align-items-start flex-wrap gap-2 mb-3">
+  <div>
+    <h1 class="h3 mb-1">{{ p.name }} {% if p.locked %}<i class="bi bi-lock text-secondary" title="locked"></i>{% endif %}</h1>
+    <div class="text-secondary small">{{ origins.get(p.origin, p.origin) }} · created {{ p.created_at|dt }} · updated {{ p.updated_at|dt }}
+      {% if p.source %}· source <code>{{ p.source }}</code>{% endif %}</div>
+    {% if p.description %}<div class="mt-1">{{ p.description }}</div>{% endif %}
+  </div>
+  <div class="d-flex gap-2">
+    <form method="post" action="{{ url_for('presets.duplicate', preset_id=p.id) }}"><button class="btn btn-sm btn-outline-primary"><i class="bi bi-files"></i> Duplicate</button></form>
+    <a class="btn btn-sm btn-outline-secondary" href="{{ url_for('presets.download', preset_id=p.id) }}"><i class="bi bi-download"></i> JSON</a>
+    {% if not p.locked %}<form method="post" action="{{ url_for('presets.delete', preset_id=p.id) }}" onsubmit="return confirm('Delete this preset? Runs that used it keep their parameters.')"><button class="btn btn-sm btn-outline-danger"><i class="bi bi-trash"></i></button></form>{% endif %}
+  </div>
+</div>
+
+<div class="row g-4">
+  <div class="col-lg-6">
+    <div class="card mb-4">
+      <div class="card-header">Values set by this preset <span class="small text-secondary">(fields not listed keep the form's own value)</span></div>
+      <table class="table table-sm mb-0 small">
+        <thead><tr><th>Parameter</th><th>Value</th></tr></thead>
+        <tbody>{% for k, v in flat %}<tr><td><code>{{ k[2:] }}</code>{% if k.startswith('c:') %} <span class="text-secondary">(caller)</span>{% endif %}</td><td>{{ v }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% if runs %}
+    <div class="card mb-4"><div class="card-header">Runs started from this preset</div>
+      <ul class="list-group list-group-flush small">{% for r in runs %}<li class="list-group-item"><a href="{{ url_for('workflows.detail', run_id=r.run_id) }}">{{ r.run_id }}</a> · {{ r.workflow_type }}
+        {% set ch = r.params.preset.changed_after_applying %}{% if ch %}<span class="text-warning">· changed: {{ ch|join(', ') }}</span>{% endif %}</li>{% endfor %}</ul></div>
+    {% endif %}
+  </div>
+  <div class="col-lg-6">
+    {% if p.notes %}
+    <div class="card mb-4">
+      <div class="card-header">How the values were derived</div>
+      <table class="table table-sm mb-0 small">
+        <thead><tr><th>Parameter</th><th>Value</th><th>Status</th><th>Reason</th></tr></thead>
+        <tbody>{% for n in p.notes %}
+          <tr><td><code>{{ n.param }}</code></td><td>{{ '—' if n.value is none else n.value }}</td>
+            <td><span class="badge text-bg-{{ {'mapped':'success','approximate':'warning','not mappable':'secondary','not mapped':'secondary'}.get(n.status,'light') }}">{{ n.status }}</span></td>
+            <td>{{ n.reason }}</td></tr>{% endfor %}</tbody>
+      </table>
+    </div>
+    {% endif %}
+    {% if p.profile %}{% set pr = p.profile %}
+    <div class="card mb-4">
+      <div class="card-header">Filter profile of the source VCF</div>
+      <div class="card-body small">
+        <div>Caller: <strong>{{ pr.caller }}</strong> · {{ '{:,}'.format(pr.records) }} records · sample(s): {{ pr.samples|join(', ') }}</div>
+        {% for f in pr.facts %}<div class="mt-1"><code>{{ f.key }}</code> = {{ f.value }} {% if f.meaning %}<span class="text-secondary">— {{ f.meaning }}</span>{% endif %}</div>{% endfor %}
+        <div class="fw-semibold mt-3">FILTER labels applied to records</div>
+        <table class="table table-sm small mb-2"><tbody>{% for k, v in pr.filter_counts.items() %}<tr><td><code>{{ k }}</code></td><td class="text-end">{{ '{:,}'.format(v) }}</td></tr>{% endfor %}</tbody></table>
+        <div class="fw-semibold">Observed values of PASS calls (effective thresholds)</div>
+        <table class="table table-sm small mb-2"><thead><tr><th></th><th>n</th><th>min</th><th>1 %</th><th>5 %</th><th>median</th></tr></thead>
+          <tbody>{% for k, o in pr.observed_pass.items() %}<tr><td>{{ k }}</td><td>{{ '{:,}'.format(o.n) }}</td><td>{{ o.min }}</td><td>{{ o.p01 }}</td><td>{{ o.p05 }}</td><td>{{ o.median }}</td></tr>{% endfor %}</tbody></table>
+        <details><summary>All {{ pr.filters|length }} ##FILTER definitions in the header</summary>
+          <table class="table table-sm small mt-2"><tbody>{% for f in pr.filters %}<tr class="{{ '' if f.used else 'text-secondary' }}"><td><code>{{ f.id }}</code></td><td>{{ f.description }}</td><td class="text-end">{{ '{:,}'.format(f.records) if f.used else 'unused' }}</td></tr>{% endfor %}</tbody></table>
+        </details>
+        <details class="mt-2"><summary>Command lines recorded in the header</summary>
+          {% for c in pr.command_lines %}<div class="mt-2"><code>{{ c.key }}{% if c.id %} {{ c.id }}{% endif %}</code><pre class="small bg-light p-2 text-wrap">{{ c.command }}</pre></div>{% endfor %}
+        </details>
+      </div>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+{% if not p.locked %}
+<div class="card">
+  <div class="card-header">Edit</div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('presets.edit', preset_id=p.id) }}">
+      <div class="row g-2">
+        <div class="col-md-4"><label class="form-label small mb-0">Name</label><input class="form-control" name="name" value="{{ p.name }}" maxlength="80" required></div>
+        <div class="col-md-8"><label class="form-label small mb-0">Description</label><input class="form-control" name="description" value="{{ p.description or '' }}"></div>
+        <div class="col-12"><label class="form-label small mb-0">Parameters (JSON — validated against the same rules as the Start form)</label>
+          <textarea class="form-control font-monospace small" name="params_json" rows="16">{{ params_json }}</textarea></div>
+      </div>
+      <button class="btn btn-primary mt-2">Save</button>
+    </form>
+  </div>
+</div>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,25 @@
+{% extends "base.html" %}
+{% block title %}Files · {{ run.run_id }}{% endblock %}
+{% block content %}
+<h1 class="h4">Output files — <a href="{{ url_for('workflows.detail', run_id=run.run_id) }}">{{ run.run_id }}</a></h1>
+<div class="mb-2"><code>{{ base }}/{{ relpath }}</code></div>
+<div class="card">
+  <table class="table table-sm mb-0">
+    <thead><tr><th>Name</th><th>Size</th><th></th></tr></thead>
+    <tbody>
+    {% if relpath %}
+      {% set parent = relpath.rsplit('/', 1)[0] if '/' in relpath else '' %}
+      <tr><td colspan="3"><a href="{{ url_for('workflows.files', run_id=run.run_id, relpath=parent) }}"><i class="bi bi-arrow-up"></i> ..</a></td></tr>
+    {% endif %}
+    {% for e in entries %}
+      <tr>
+        <td>{% if e.is_dir %}<i class="bi bi-folder"></i>{% else %}<i class="bi bi-file-earmark"></i>{% endif %}
+          <a href="{{ url_for('workflows.files', run_id=run.run_id, relpath=e.rel) }}">{{ e.name }}</a></td>
+        <td>{{ e.size|filesize if not e.is_dir else '' }}</td>
+        <td>{% if not e.is_dir %}<a href="{{ url_for('workflows.files', run_id=run.run_id, relpath=e.rel, download=1) }}"><i class="bi bi-download"></i></a>{% endif %}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

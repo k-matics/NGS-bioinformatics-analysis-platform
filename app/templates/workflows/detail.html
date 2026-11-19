@@ -1,0 +1,170 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import status_badge, progress_bar with context %}
+{% block title %}{{ run.run_id }}{% endblock %}
+{% block content %}
+<div class="d-flex flex-wrap justify-content-between align-items-start gap-2 mb-3">
+  <div>
+    <h1 class="h4 mb-1">{{ run.run_id }} <span id="run-status">{{ status_badge(run.status) }}</span></h1>
+    <div class="text-secondary">{{ definition.name if definition else run.workflow_type }} v{{ run.workflow_version }}</div>
+  </div>
+  <div class="d-flex gap-2" id="run-controls">
+    {% set actions = [
+      ('pause', 'Pause', 'pause-fill', 'warning', 'running'),
+      ('unpause', 'Continue', 'play-fill', 'success', 'paused'),
+      ('cancel', 'Cancel', 'stop-fill', 'danger', 'pending,queued,running,paused'),
+      ('resume', 'Resume', 'arrow-clockwise', 'primary', 'failed,cancelled'),
+    ] %}
+    {% for action, label, icon, color, when in actions %}
+      <form method="post" action="{{ url_for('workflows.control', run_id=run.run_id, action=action) }}" data-show-when="{{ when }}"
+            {% if run.status not in when.split(',') %}hidden{% endif %}
+            {% if action == 'cancel' %}onsubmit="return confirm('Cancel this workflow? Running tools are terminated; intermediate files are kept.')"{% endif %}>
+        <button class="btn btn-{{ color }}"><i class="bi bi-{{ icon }}"></i> {{ label }}</button>
+      </form>
+    {% endfor %}
+    <a class="btn btn-outline-secondary" href="{{ url_for('workflows.files', run_id=run.run_id) }}"><i class="bi bi-folder2-open"></i> Output files</a>
+  </div>
+</div>
+
+<div class="row g-3 mb-3">
+  <div class="col-lg-5">
+    <div class="card h-100">
+      <div class="card-body">
+        <dl class="row mb-0 small">
+          <dt class="col-5">Sample</dt><dd class="col-7"><a href="{{ url_for('samples.detail', sample_id=run.sample.sample_id) }}">{{ run.sample.sample_id }}</a></dd>
+          <dt class="col-5">Workflow</dt><dd class="col-7">{{ run.workflow_type }}</dd>
+          <dt class="col-5">Reference</dt><dd class="col-7">{{ run.reference.name }} ({{ run.reference.build }})</dd>
+          <dt class="col-5">Aligner</dt><dd class="col-7">{{ 'BWA-MEM' if run.steps|selectattr('key', 'equalto', 'bwa_align')|list else '— (not used by this workflow)' }}</dd>
+          <dt class="col-5">Variant caller(s)</dt><dd class="col-7">{{ run.params.get('callers')|join(', ') if run.params.get('callers') else '— (not used by this workflow)' }}</dd>
+          <dt class="col-5">Threads</dt><dd class="col-7">{{ run.params.get('threads') }}</dd>
+          {% set pr = run.params.get('preset') %}
+          <dt class="col-5">Parameter preset</dt><dd class="col-7">{% if pr %}<a href="{{ url_for('presets.detail', preset_id=pr.id) }}">{{ pr.name }}</a>
+            {% if pr.changed_after_applying %}<div class="text-warning">changed after applying: {{ pr.changed_after_applying|join(', ') }}</div>{% else %}<span class="text-secondary">(unchanged)</span>{% endif %}
+            {% else %}<span class="text-secondary">none</span>{% endif %}
+            <form class="d-flex gap-1 mt-1" method="post" action="{{ url_for('presets.from_run', run_id=run.run_id) }}">
+              <input class="form-control form-control-sm" name="preset_name" maxlength="80" placeholder="Save parameters as preset…">
+              <button class="btn btn-sm btn-outline-primary" title="Save this run's parameters as a preset"><i class="bi bi-save"></i></button>
+            </form>
+            {% if run.workflow_type == 'vcf_variant_check' and run.status == 'completed' %}
+            <a class="btn btn-sm btn-primary mt-2" href="{{ url_for('workflows.variant_check', run_id=run.run_id) }}"><i class="bi bi-table"></i> Open variant-by-variant viewer</a>{% endif %}
+          </dd>
+          <dt class="col-5">Submitted</dt><dd class="col-7">{{ run.created_at|dt }} by {{ run.submitted_by }}</dd>
+          <dt class="col-5">Started</dt><dd class="col-7" id="run-started">{{ run.started_at|dt }}</dd>
+          <dt class="col-5">Elapsed</dt><dd class="col-7" id="run-elapsed" data-seconds="{{ run.elapsed_seconds or '' }}">{{ run.elapsed_seconds|duration }}</dd>
+          <dt class="col-5">Estimated remaining</dt><dd class="col-7 text-secondary">Not shown — no reliable estimate yet (needs runtime history).</dd>
+          <dt class="col-5">Output directory</dt><dd class="col-7 text-break"><code>{{ run.output_dir }}</code></dd>
+        </dl>
+      </div>
+    </div>
+  </div>
+  <div class="col-lg-7">
+    <div class="card h-100">
+      <div class="card-body">
+        <div class="d-flex justify-content-between small mb-1">
+          <span>Overall progress <span class="text-secondary">(finished steps / total steps)</span></span>
+          <span id="run-progress-label">{{ run.progress }}%</span>
+        </div>
+        <div id="run-progress">{{ progress_bar(run.progress, run.status) }}</div>
+        <div class="mt-3 small"><span class="text-secondary">Current stage:</span> <span id="current-step">{{ run.current_step.name if run.current_step else '—' }}</span></div>
+        <div class="small"><span class="text-secondary">Current command:</span></div>
+        <pre class="current-command" id="current-command">{{ (run.current_step.commands[-1].display if run.current_step and run.current_step.commands else '—') }}</pre>
+        <div id="run-error" class="alert alert-danger py-2 small {% if not run.error_message %}d-none{% endif %}">{{ run.error_message or '' }}</div>
+        <div id="run-warnings" class="alert alert-warning py-2 small {% if not run.warnings %}d-none{% endif %}">
+          <strong>Warnings (need review, not necessarily errors):</strong>
+          <ul class="mb-0">{% for w in run.warnings %}<li>{{ w }}</li>{% endfor %}</ul>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% if reports %}
+<div class="card mb-3"><div class="card-body py-2 small"><i class="bi bi-file-earmark-text"></i> <strong>Reports:</strong>
+  {% for r in reports %}<a class="ms-2" target="_blank" href="{{ url_for('workflows.files', run_id=run.run_id, relpath=r.rel) }}">{{ r.name }}</a>{% endfor %}
+</div></div>
+{% endif %}
+{% include "partials/limitations_card.html" %}
+
+<div class="row g-3">
+  <div class="col-xl-5">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-list-check"></i> Processing steps</div>
+      <table class="table table-sm mb-0 align-middle steps-table">
+        <tbody id="steps">
+        {% for s in run.steps %}
+          <tr data-step="{{ s.key }}" class="step-row" role="button">
+            <td class="text-secondary">{{ s.order }}</td>
+            <td>{{ s.name }}<div class="small text-secondary step-msg">{{ s.message or '' }}</div></td>
+            <td class="step-status">{{ status_badge(s.status) }}{% if s.warnings %} <span class="badge text-bg-warning">{{ s.warnings|length }} warn</span>{% endif %}</td>
+            <td class="text-nowrap small step-duration">{{ s.duration_seconds|duration }}</td>
+          </tr>
+        {% endfor %}
+        </tbody>
+      </table>
+      <div class="card-footer small text-secondary">Click a step to show its log.</div>
+    </div>
+
+    <div class="card mt-3">
+      <div class="card-header"><i class="bi bi-box-arrow-right"></i> Step outputs &amp; key results</div>
+      <div class="card-body small">
+        {% for s in run.steps if s.outputs %}
+          <div class="mb-2"><strong>{{ s.name }}</strong>
+            <ul class="mb-0">
+            {% for name, path in s.outputs.items() %}
+              {% set rel = path.replace(run.output_dir ~ '/', '') %}
+              <li>{{ name }}: <a href="{{ url_for('workflows.files', run_id=run.run_id, relpath=rel) }}" target="_blank">{{ rel }}</a></li>
+            {% endfor %}
+            </ul>
+          </div>
+        {% else %}
+          <span class="text-secondary">No outputs yet.</span>
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+  <div class="col-xl-7">
+    <div class="card">
+      <div class="card-header d-flex justify-content-between align-items-center">
+        <span><i class="bi bi-terminal"></i> Live log: <strong id="log-title">all steps</strong></span>
+        <div class="form-check form-switch small mb-0"><input class="form-check-input" type="checkbox" id="log-follow" checked><label class="form-check-label" for="log-follow">follow</label></div>
+      </div>
+      <pre class="log-panel mb-0" id="log-panel"></pre>
+    </div>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header"><a data-bs-toggle="collapse" href="#commands" class="text-decoration-none"><i class="bi bi-code-square"></i> Executed commands, exit codes and tool versions ({{ run.steps|map(attribute='commands')|map('length')|sum }})</a></div>
+  <div class="collapse" id="commands">
+    <table class="table table-sm small mb-0">
+      <thead><tr><th>Step</th><th>Command</th><th>Versions</th><th>Exit</th><th>Duration</th></tr></thead>
+      <tbody>
+      {% for s in run.steps %}{% for c in s.commands %}
+        <tr><td>{{ s.name }}</td><td><code class="text-break">{{ c.display }}</code></td>
+          <td>{% for t, v in c.tool_versions.items() %}{{ t }} {{ v }}<br>{% endfor %}</td>
+          <td>{{ c.exit_codes }}</td><td>{{ c.duration_seconds|duration }}</td></tr>
+      {% endfor %}{% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<div class="card mt-3">
+  <div class="card-header"><a data-bs-toggle="collapse" href="#events" class="text-decoration-none"><i class="bi bi-journal-text"></i> Audit trail ({{ run.events|length }} events)</a></div>
+  <ul class="list-group list-group-flush small collapse" id="events">
+    {% for e in run.events %}
+      <li class="list-group-item"><span class="text-secondary">{{ e.timestamp|dt }}</span> [{{ e.level }}] {{ e.message }}</li>
+    {% endfor %}
+  </ul>
+</div>
+{% endblock %}
+{% block scripts %}
+<script>
+  NGS.monitorRun({
+    runId: "{{ run.run_id }}",
+    eventsUrl: "{{ url_for('api.events', run_id=run.run_id) }}",
+    initialStatus: "{{ run.status }}",
+    terminal: {{ ['completed', 'failed', 'cancelled']|tojson }},
+  });
+</script>
+{% endblock %}

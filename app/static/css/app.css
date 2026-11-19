@@ -1,0 +1,20 @@
+:root { --sidebar-bg: #16213a; --sidebar-fg: #c7d0e3; --accent: #3d7cf2; }
+body { background: #f4f6fa; }
+.app-shell { min-height: 100vh; }
+.sidebar { width: 250px; background: var(--sidebar-bg); color: var(--sidebar-fg); position: sticky; top: 0; height: 100vh; }
+.sidebar .brand { color: #fff; font-size: 1.25rem; font-weight: 600; }
+.sidebar .brand i { color: #6fd3a8; }
+.sidebar .nav-link { color: var(--sidebar-fg); border-radius: .4rem; padding: .45rem .7rem; font-size: .93rem; }
+.sidebar .nav-link:hover { background: rgba(255,255,255,.07); color: #fff; }
+.sidebar .nav-link.active { background: var(--accent); color: #fff; }
+.main-content { min-width: 0; }
+.card { border: 1px solid #e1e6ef; box-shadow: 0 1px 2px rgba(16,24,40,.04); }
+.card-header { background: #fff; font-weight: 600; }
+.stat-card { color: inherit; transition: box-shadow .15s; }
+.stat-card:hover { box-shadow: 0 4px 12px rgba(16,24,40,.08); }
+.status-badge { min-width: 5.5rem; }
+.log-panel { background: #0f1525; color: #d6deeb; font-size: .78rem; height: 560px; overflow: auto; padding: .75rem; white-space: pre-wrap; word-break: break-all; }
+.current-command { background: #f1f3f8; font-size: .78rem; padding: .5rem; white-space: pre-wrap; word-break: break-all; max-height: 7rem; overflow: auto; }
+.steps-table tr.selected td { background: #e8f0fe; }
+.resource-meter .progress { height: .6rem; }
+@media (max-width: 768px) { .sidebar { width: 100%; height: auto; position: static; } .app-shell { flex-direction: column; } }

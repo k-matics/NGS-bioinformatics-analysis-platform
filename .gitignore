@@ -1,0 +1,81 @@
+# ---------------------------------------------------------------- data: never in git
+# Sequencing data, references and indexes
+*.bam
+*.bai
+*.cram
+*.crai
+*.sam
+*.fa
+*.fasta
+*.fna
+*.fa.gz
+*.fasta.gz
+*.fai
+*.dict
+*.amb
+*.ann
+*.bwt
+*.pac
+*.sa
+*.0123
+*.bwt.2bit.64
+*.fastq
+*.fastq.gz
+*.fq
+*.fq.gz
+*.vcf
+*.vcf.gz
+*.vcf.bgz
+*.g.vcf.gz
+*.bcf
+*.tbi
+*.csi
+*.bed
+*.bed.gz
+*.gtf
+*.gff
+*.gff3
+*.sdf
+
+# Run outputs, uploads, logs, database, per-server state
+results/
+uploads/*
+!uploads/.gitkeep
+logs/
+database/
+# instance/ holds secret_key, rtg_sdf, pid files
+instance/
+*.db
+*.sqlite
+*.sqlite3
+*.pid
+*.log
+
+# Exports that may contain sample-level results
+*.tsv
+*.tsv.gz
+*.csv
+
+# ---------------------------------------------------------------- Python / tooling
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.coverage
+htmlcov/
+*.egg-info/
+.venv/
+venv/
+.env
+.env.*
+
+# Editors / OS
+.vscode/
+.idea/
+*.swp
+.DS_Store
+
+# Server-specific settings
+config/local.env
+
+# Server-specific assessment (hardware, users, local paths) - kept local
+documentation/ENVIRONMENT_ASSESSMENT.md

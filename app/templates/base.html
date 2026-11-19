@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block title %}NGS Platform{% endblock %} · NGS Platform</title>
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap/css/bootstrap.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='vendor/bootstrap-icons/bootstrap-icons.min.css') }}">
+  <link rel="stylesheet" href="{{ url_for('static', filename='css/app.css') }}">
+</head>
+<body>
+{% set nav = [
+  ('dashboard.index', 'speedometer2', 'Dashboard', {}),
+  ('modules.planned', 'file-earmark-binary', 'FASTQ Analysis', {'key': 'fastq'}),
+  ('modules.planned', 'diagram-3', 'BAM Analysis', {'key': 'bam'}),
+  ('modules.planned', 'bullseye', 'Variant Calling', {'key': 'variants'}),
+  ('modules.planned', 'columns-gap', 'Caller Comparison', {'key': 'caller-comparison'}),
+  ('modules.planned', 'arrow-left-right', 'External Data Comparison', {'key': 'external'}),
+  ('samples.list_samples', 'people', 'Sample Management', {}),
+  ('workflows.history', 'clock-history', 'Workflow History', {}),
+  ('modules.planned', 'file-earmark-text', 'Reports', {'key': 'reports'}),
+  ('presets.index', 'sliders', 'Parameter Presets', {}),
+  ('settings.index', 'gear', 'Settings', {}),
+] %}
+<div class="d-flex app-shell">
+  <nav class="sidebar d-flex flex-column flex-shrink-0 p-3">
+    <a href="{{ url_for('dashboard.index') }}" class="brand mb-3 text-decoration-none">
+      <i class="bi bi-dna"></i> <span>NGS Platform</span>
+    </a>
+    <ul class="nav nav-pills flex-column mb-auto">
+      {% for endpoint, icon, label, args in nav %}
+        {% set active = request.endpoint == endpoint and (not args or request.view_args.get('key') == args.get('key')) %}
+        <li class="nav-item">
+          <a href="{{ url_for(endpoint, **args) }}" class="nav-link {% if active %}active{% endif %}">
+            <i class="bi bi-{{ icon }} me-2"></i>{{ label }}
+          </a>
+        </li>
+      {% endfor %}
+    </ul>
+    <div class="small text-secondary mt-3">Phase 2 · foundation<br>For research use — not clinically validated</div>
+  </nav>
+  <main class="flex-grow-1 p-4 main-content">
+    {% with messages = get_flashed_messages(with_categories=true) %}
+      {% for category, message in messages %}
+        <div class="alert alert-{{ category }} alert-dismissible fade show" role="alert">
+          {{ message }}<button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+        </div>
+      {% endfor %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</div>
+<script src="{{ url_for('static', filename='vendor/bootstrap/js/bootstrap.bundle.min.js') }}"></script>
+<script src="{{ url_for('static', filename='js/app.js') }}"></script>
+{% block scripts %}{% endblock %}
+</body>
+</html>

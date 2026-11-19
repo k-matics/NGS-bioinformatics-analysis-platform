@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Read evidence {{ sample }}</title>{% include "reports/_style.html" %}</head>
+<body>
+<h1>BAM vs VCF read-level evidence — {{ sample }}</h1>
+<p>Run <code>{{ run_id }}</code> · reference <strong>{{ reference }}</strong> · generated {{ generated_at }}</p>
+<p>VCF <code>{{ s.vcf }}</code><br>BAM <code>{{ s.bam }}</code></p>
+<p class="note">Notes describe what the reads show; they are <em>not</em> verdicts. A low-VAF heterozygous call can be mosaicism,
+a strand-biased one can be a real variant near an amplicon end. Review flagged variants in IGV (batch file provided).</p>
+{% include "reports/_limitations.html" %}
+<h2>Summary</h2>
+<table>
+<tr><td>Variants evaluated ({{ 'PASS only' if s.pass_only else 'all records' }})</td><td class="n">{{ "{:,}".format(s.evaluated) }}</td></tr>
+<tr><td>With at least one evidence note</td><td class="n">{{ "{:,}".format(s.flagged) }}</td></tr>
+<tr><td>No ALT-supporting read in the BAM</td><td class="n">{{ "{:,}".format(s.no_alt_reads) }}</td></tr>
+<tr><td>Median observed VAF, 0/1 calls</td><td class="n">{{ s.median_vaf_het }}</td></tr>
+<tr><td>Median observed VAF, 1/1 calls</td><td class="n">{{ s.median_vaf_hom }}</td></tr>
+</table>
+<h2>Evidence notes</h2>
+<table><tr><th>Note</th><th>Variants</th></tr>{% for k, v in s.note_counts.items() %}<tr><td>{{ s.note_labels.get(k, k) }} <code>{{ k }}</code></td><td class="n">{{ "{:,}".format(v) }}</td></tr>{% endfor %}</table>
+<h2>Observed VAF distribution</h2>
+{% set mx = (s.vaf_hist|max) or 1 %}
+<table>{% for n in s.vaf_hist %}<tr><td style="width:7rem">{{ '%.2f'|format(loop.index0 / 20) }}–{{ '%.2f'|format(loop.index / 20) }}</td><td class="n" style="width:5rem">{{ n }}</td><td><span class="bar" style="width:{{ (100 * n / mx)|round(1) }}%"></span></td></tr>{% endfor %}</table>
+<p style="font-size:.8rem">Germline: peaks near 0.5 (heterozygous) and 1.0 (homozygous). Many calls at 0.05–0.3 suggest artefacts, contamination or mosaicism.</p>
+<h2>Flagged variants (first {{ top|length }})</h2>
+<table><tr><th>Variant</th><th>GT</th><th>FILTER</th><th>Depth</th><th>REF/ALT reads</th><th>VAF</th><th>ALT fwd/rev</th><th>MAPQ ref/alt</th><th>MQ0</th><th>Notes</th></tr>
+{% for r in top %}<tr><td><code>{{ r.chrom }}:{{ r.pos }} {{ r.ref }}&gt;{{ r.alt }}</code></td><td>{{ r.gt }}</td><td>{{ r.filter }}</td><td class="n">{{ r.depth }}</td><td class="n">{{ r.ref_reads }}/{{ r.alt_reads }}</td>
+<td class="n">{{ r.vaf }}</td><td class="n">{{ r.alt_fwd }}/{{ r.alt_rev }}</td><td class="n">{{ r.mean_mq_ref }}/{{ r.mean_mq_alt }}</td><td class="n">{{ r.mq0_frac }}</td><td style="font-size:.75rem">{{ r.notes }}</td></tr>{% endfor %}</table>
+<p style="font-size:.8rem">Full table: <code>read_evidence.tsv.gz</code>. IGV: load <code>igv_flagged_sites.bed</code>, or run <code>igv_batch.txt</code> (Tools → Run Batch Script; paths are server paths).</p>
+</body></html>

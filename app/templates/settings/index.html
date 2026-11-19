@@ -1,0 +1,93 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import validation_badge with context %}
+{% block title %}Settings{% endblock %}
+{% block content %}
+<h1 class="h3 mb-3">Settings</h1>
+
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-database"></i> Reference genomes</div>
+  {% for r in references %}
+  <div class="card-body border-bottom">
+    <div class="d-flex justify-content-between flex-wrap gap-2">
+      <div>
+        <strong>{{ r.name }}</strong> {% if r.is_default %}<span class="badge text-bg-primary">default</span>{% endif %}
+        {{ validation_badge(r.status) }}
+        <div class="small"><code>{{ r.fasta_path }}</code></div>
+        <div class="small text-secondary">Build {{ r.build }} · naming {{ r.naming }} · {{ r.contig_count }} contigs ({{ r.alt_contig_count }} ALT) · checked {{ r.last_checked|dt }}</div>
+      </div>
+      <div class="d-flex gap-2 align-items-start">
+        <form method="post" action="{{ url_for('settings.check_reference', ref_id=r.id) }}"><button class="btn btn-sm btn-outline-primary">Re-check</button></form>
+        {% if not r.is_default %}<form method="post" action="{{ url_for('settings.make_default', ref_id=r.id) }}"><button class="btn btn-sm btn-outline-secondary">Make default</button></form>{% endif %}
+      </div>
+    </div>
+    {% set rep = r.check_report or {} %}
+    {% if rep.get('files') %}
+    <div class="row small mt-2">
+      {% for key, label in [('fasta','FASTA'),('fai','.fai index'),('dict','.dict (GATK)'),('bwa_index','BWA index'),('bwa_mem2_index','BWA-MEM2 index'),('alt_file','BWA .alt file')] %}
+        {% set f = rep['files'].get(key, {}) %}
+        <div class="col-6 col-md-4 col-xl-2"><i class="bi bi-{{ 'check-circle text-success' if f.get('exists') else 'x-circle text-danger' }}"></i> {{ label }}</div>
+      {% endfor %}
+    </div>
+    {% endif %}
+    {% if rep.get('alt_masking') %}{% set m = rep['alt_masking'] %}
+    <div class="small mt-1"><i class="bi bi-{{ 'shield-check text-success' if m.verified else 'x-circle text-danger' }}"></i>
+      ALT masking {{ 'verified' if m.verified else 'NOT verified' }} ({{ m.checked }} sampled intervals read back as N; {{ '{:,}'.format(m.masked_bp or 0) }} bp masked)
+      {% if rep.get('par_masked') %} · chrY PAR masked{% endif %}</div>{% endif %}
+    {% for e in rep.get('errors', []) %}<div class="alert alert-danger py-1 my-1 small">{{ e }}</div>{% endfor %}
+    {% for w in rep.get('warnings', []) %}<div class="alert alert-warning py-1 my-1 small">{{ w }}</div>{% endfor %}
+  </div>
+  {% endfor %}
+  <div class="card-footer">
+    <form class="row g-2" method="post" action="{{ url_for('settings.add_reference') }}">
+      <div class="col-md-3"><input class="form-control" name="name" placeholder="Name, e.g. grch38_noalt" required></div>
+      <div class="col-md-6"><input class="form-control" name="fasta_path" placeholder="/absolute/path/to/genome.fa" required></div>
+      <div class="col-md-3"><button class="btn btn-outline-primary w-100">Register reference</button></div>
+    </form>
+    <div class="form-text">Registering only reads the FASTA header and its index files — the reference is never modified.</div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-sliders"></i> Runtime defaults</div>
+  <div class="card-body">
+    <form method="post" action="{{ url_for('settings.save_runtime') }}" class="row g-3">
+      <div class="col-md-3"><label class="form-label">Threads per job</label><input class="form-control" type="number" min="1" max="64" name="threads_per_job" value="{{ settings.threads_per_job }}"></div>
+      <div class="col-md-3"><label class="form-label">Disk safety margin (GB)</label><input class="form-control" type="number" step="0.5" min="0" name="min_free_disk_gb" value="{{ settings.min_free_disk_gb }}"></div>
+      <div class="col-md-3"><label class="form-label">FASTQ records to format-check</label><input class="form-control" type="number" min="1000" name="fastq_check_records" value="{{ settings.fastq_check_records }}"></div>
+      <div class="col-md-3 d-flex align-items-end"><div class="form-check"><input class="form-check-input" type="checkbox" name="retain_intermediates" id="ri" {% if settings.retain_intermediates %}checked{% endif %}><label class="form-check-label" for="ri">Retain intermediate files</label></div></div>
+      <div class="col-md-9"><label class="form-label">GATK launcher path</label><input class="form-control" name="gatk_path" value="{{ settings.gatk_path }}"></div>
+      <div class="col-md-9"><label class="form-label">Java home for GATK</label><input class="form-control" name="gatk_java_home" value="{{ settings.gatk_java_home }}" placeholder="empty = auto-detect Java 17-21 (currently: {{ gatk_java or 'none found' }})">
+        <div class="form-text">GATK 4.6 requires Java 17; the conda environment's default Java (25) is not used for GATK.</div></div>
+      <div class="col-md-6"><label class="form-label">DeepVariant Docker image</label><input class="form-control" name="deepvariant_image" value="{{ settings.deepvariant_image }}">
+        <div class="form-text">Pinned version (e.g. <code>google/deepvariant:1.10.0</code>); the image ID is recorded with every run.</div></div>
+      <div class="col-md-3"><label class="form-label">RTG vcfeval memory (GB)</label><input class="form-control" type="number" min="2" max="48" name="rtg_mem_gb" value="{{ settings.rtg_mem_gb }}"></div>
+      <div class="col-md-3 d-flex align-items-end"><button class="btn btn-primary w-100">Save</button></div>
+    </form>
+    <div class="form-text mt-2">Concurrent jobs are set when the worker starts (<code>NGS_WORKER_CONCURRENCY</code> in <code>scripts/start_services.sh</code>, default 1).</div>
+  </div>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-tools"></i> Bioinformatics tools (resolved from the running environment)</div>
+  <table class="table table-sm mb-0">
+    <thead><tr><th>Tool</th><th>Version</th><th>Path</th><th>Needed from</th></tr></thead>
+    <tbody>
+    {% for t in tools %}
+      <tr class="{% if not t.path %}table-warning{% endif %}">
+        <td>{{ t.tool }}</td><td>{{ t.version or 'NOT FOUND' }}</td><td class="small"><code>{{ t.path or '—' }}</code></td><td>Phase {{ t.phase }}</td>
+      </tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+
+<div class="card">
+  <div class="card-header"><i class="bi bi-folder"></i> Paths</div>
+  <div class="card-body small">
+    <div>Results: <code>{{ config.RESULTS_DIR }}</code></div>
+    <div>Logs: <code>{{ config.LOG_DIR }}</code></div>
+    <div>Allowed data folders: {% for r in config.DATA_ROOTS %}<code>{{ r }}</code> {% endfor %}</div>
+    <div>Database: <code>{{ config.SQLALCHEMY_DATABASE_URI }}</code></div>
+  </div>
+</div>
+{% endblock %}

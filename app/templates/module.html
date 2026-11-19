@@ -1,0 +1,72 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import status_badge, progress_bar with context %}
+{% block title %}{{ title }}{% endblock %}
+{% block content %}
+<h1 class="h3">{{ title }}</h1>
+<p class="text-secondary">{{ intro }} Workflows are started from a sample's page
+  (<a href="{{ url_for('samples.list_samples') }}">Sample Management</a> → sample → <em>Start a workflow</em>),
+  so every result is tied to a registered sample and its checksummed input files.</p>
+
+<div class="row g-3 mb-4">
+{% for w in workflows %}
+  <div class="col-lg-6"><div class="card h-100">
+    <div class="card-header fw-semibold">{{ w.name }} <span class="text-secondary small">v{{ w.version }}</span></div>
+    <div class="card-body small">
+      <p>{{ w.description }}</p>
+      <div class="text-secondary">Inputs: {{ (w.input_roles or ['any'])|join(', ') }}</div>
+      <ol class="mb-0 mt-2">{% for s in w.build_steps(w.default_params) %}<li>{{ s.name }}</li>{% endfor %}</ol>
+    </div>
+  </div></div>
+{% endfor %}
+</div>
+
+{% if callers %}
+<div class="card mb-4">
+  <div class="card-header">Variant caller plug-ins</div>
+  <table class="table table-sm mb-0">
+    <thead><tr><th>Caller</th><th>Mode</th><th>Status</th><th>Notes</th></tr></thead>
+    <tbody>
+    {% for c, ok, why in callers %}
+      <tr><td>{{ c.name }}</td><td>{{ c.mode }}</td>
+        <td>{% if ok %}<span class="badge text-bg-success">available</span>{% else %}<span class="badge text-bg-secondary">unavailable</span>{% endif %}</td>
+        <td class="small">{{ why or c.description }}</td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+{% if comparisons is defined and comparisons %}
+<div class="card mb-4">
+  <div class="card-header"><i class="bi bi-columns-gap"></i> Comparison results</div>
+  <table class="table table-sm mb-0 align-middle">
+    <thead><tr><th>Run</th><th>Sample</th><th>Comparison</th><th>Sets</th><th>Key result</th><th>Report</th></tr></thead>
+    <tbody>
+    {% for c in comparisons %}{% set s = c.summary %}
+      <tr><td><a href="{{ url_for('workflows.detail', run_id=c.run.run_id) }}">{{ c.run.run_id }}</a></td>
+        <td>{{ c.run.sample.sample_id }}</td><td>{{ c.step.name }}</td>
+        <td class="small">{{ (s.sets or s.bams or [s.vcf])|join(', ') if (s.sets or s.bams or s.vcf) else '' }}</td>
+        <td class="small">{% if s.in_all is defined %}{{ "{:,}".format(s.in_all) }} of {{ "{:,}".format(s.union) }} variants in all sets
+          {% elif s.target_diff is defined %}{{ s.target_diff.covered_only_a + s.target_diff.covered_only_b }} targets covered differently
+          {% elif s.flagged is defined %}{{ "{:,}".format(s.flagged) }} of {{ "{:,}".format(s.evaluated) }} variants with evidence notes{% endif %}</td>
+        <td><a href="{{ url_for('workflows.files', run_id=c.run.run_id, relpath=c.rel) }}" target="_blank">open</a></td></tr>
+    {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endif %}
+
+<div class="card">
+  <div class="card-header">Recent runs</div>
+  <table class="table table-sm mb-0 align-middle">
+    <thead><tr><th>Run</th><th>Sample</th><th>Workflow</th><th>Status</th><th style="width:20%">Progress</th><th>Created</th></tr></thead>
+    <tbody>
+    {% for r in runs %}
+      <tr><td><a href="{{ url_for('workflows.detail', run_id=r.run_id) }}">{{ r.run_id }}</a></td>
+        <td>{{ r.sample.sample_id }}</td><td>{{ r.workflow_type }}</td><td>{{ status_badge(r.status) }}</td>
+        <td>{{ progress_bar(r.progress, r.status) }}</td><td>{{ r.created_at|dt }}</td></tr>
+    {% else %}<tr><td colspan="6" class="text-secondary text-center py-3">No runs yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

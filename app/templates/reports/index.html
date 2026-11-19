@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import status_badge with context %}
+{% block title %}Reports{% endblock %}
+{% block content %}
+<h1 class="h3">Reports</h1>
+<p class="text-secondary">Every completed run writes an HTML + JSON run report; comparison runs add their own report.
+Reports are files in the run folder, so they stay with the data and can be archived with it.</p>
+<div class="card mb-4"><div class="card-header"><i class="bi bi-filetype-csv"></i> CSV exports (all completed runs)</div>
+  <div class="card-body small">
+    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('modules.reports_csv', kind='qc') }}">QC metrics per run</a>
+    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('modules.reports_csv', kind='variants') }}">Variant counts per caller</a>
+    <a class="btn btn-sm btn-outline-primary" href="{{ url_for('modules.reports_csv', kind='comparisons') }}">Pairwise concordance</a>
+    <div class="text-secondary mt-2">Per-run CSVs (concordance matrix, intersections, BAM metrics, read evidence) are in each run's
+      <code>comparison/</code> folder.</div>
+  </div></div>
+<div class="card">
+  <div class="card-header">Completed runs</div>
+  <table class="table table-sm mb-0 align-middle">
+    <thead><tr><th>Run</th><th>Sample</th><th>Workflow</th><th>Finished</th><th>Reports</th></tr></thead>
+    <tbody>
+    {% for r, reps in items %}
+      <tr><td><a href="{{ url_for('workflows.detail', run_id=r.run_id) }}">{{ r.run_id }}</a></td><td>{{ r.sample.sample_id }}</td>
+        <td>{{ r.workflow_type }} <span class="text-secondary small">v{{ r.workflow_version }}</span></td><td>{{ r.finished_at|dt }}</td>
+        <td class="small">{% for x in reps %}<a target="_blank" class="me-2" href="{{ url_for('workflows.files', run_id=r.run_id, relpath=x.rel) }}">{{ x.name }}</a>{% else %}<span class="text-secondary">—</span>{% endfor %}</td></tr>
+    {% else %}<tr><td colspan="5" class="text-secondary text-center py-3">No completed runs yet.</td></tr>{% endfor %}
+    </tbody>
+  </table>
+</div>
+{% endblock %}

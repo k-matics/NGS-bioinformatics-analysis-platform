@@ -1,0 +1,50 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>Variant check {{ sample }}</title>{% include "reports/_style.html" %}</head>
+<body>
+<h1>Variant-by-variant check — {{ sample }}</h1>
+<p>Run <code>{{ run_id }}</code> · reference <strong>{{ reference }}</strong> · generated {{ generated_at }}</p>
+<table>
+<tr><td>Baseline (every variant looked up)</td><td><strong>{{ s.baseline.label }}</strong> ({{ s.baseline.origin }})<br><code>{{ s.baseline.source }}</code></td></tr>
+<tr><td>Our VCF</td><td><strong>{{ s.query.label }}</strong> ({{ s.query.origin }})<br><code>{{ s.query.source }}</code></td></tr>
+<tr><td>Settings</td><td>baseline {{ 'PASS only' if s.baseline_pass_only else 'all records' }} · our VCF {{ 'all records (filtered included)' if s.query_all_records else 'PASS only' }} · nearby window {{ s.nearby_window }} bp · haplotype rescue {{ 'yes' if s.haplotype_check else 'no' }}<br>regions <code>{{ s.regions or 'whole file' }}</code></td></tr>
+</table>
+<p class="note">"Not in our VCF" is a finding to explain, not automatically an error of either pipeline. Check such variants with the
+<em>BAM vs VCF read-level validation</em> workflow or in IGV. Neither file is a truth set.</p>
+{% include "reports/_limitations.html" %}
+
+<h2>Result: {{ "{:,}".format(s.baseline_variants) }} baseline variants</h2>
+<table><tr><th>Status</th><th>Variants</th><th>%</th></tr>
+{% for k, label in s.status_labels.items() %}{% set n = s.by_status.get(k, 0) %}
+<tr><td>{{ label }} <code>{{ k }}</code></td><td class="n">{{ "{:,}".format(n) }}</td><td class="n">{{ '%.2f'|format(100 * n / s.baseline_variants) if s.baseline_variants else '—' }}</td></tr>{% endfor %}
+</table>
+<p>Found and PASS: <strong>{{ s.pct_found_pass }} %</strong> · present in our VCF in any form: <strong>{{ s.pct_found_any }} %</strong> ·
+found with a different genotype (0/1 vs 1/1): {{ "{:,}".format(s.gt_different) }}{% if s.query_only_pass is not none %} · our PASS variants not in the baseline: {{ "{:,}".format(s.query_only_pass) }}{% endif %}</p>
+{% if s.skipped %}<p style="font-size:.8rem">Baseline records not checked: {% for k, v in s.skipped.items() %}{{ k }} {{ "{:,}".format(v) }}{% if not loop.last %}, {% endif %}{% endfor %}.</p>{% endif %}
+
+<h2>By variant type</h2>
+<table><tr><th>Type</th>{% for k in s.status_labels %}<th>{{ k }}</th>{% endfor %}</tr>
+{% for t, c in s.by_type.items() %}<tr><td>{{ t }}</td>{% for k in s.status_labels %}<td class="n">{{ "{:,}".format(c.get(k, 0)) }}</td>{% endfor %}</tr>{% endfor %}</table>
+
+<h2>What if our VCF were filtered differently?</h2>
+<table><tr><th>Scenario</th><th>Found</th><th>Missing</th><th>% found</th></tr>
+{% for w in s.what_if_examples %}<tr><td>{{ w.label }}</td><td class="n">{{ "{:,}".format(w.found) }}</td><td class="n">{{ "{:,}".format(w.missing) }}</td><td class="n">{{ w.found_pct }}</td></tr>{% endfor %}</table>
+<p style="font-size:.8rem">Try your own thresholds in the platform's interactive viewer (run page → <em>Open variant-by-variant viewer</em>).</p>
+
+<h2>Found but filtered: which of our filters</h2>
+<table><tr><th>Filter label</th><th>Variants</th></tr>{% for k, v in s.filtered_by_label.items() %}<tr><td><code>{{ k }}</code></td><td class="n">{{ "{:,}".format(v) }}</td></tr>{% endfor %}</table>
+
+<h2>Missing (not called + nearby only): baseline quality</h2>
+<table><tr><th>Baseline QUAL</th><th>Variants</th></tr>{% for k, v in s.missing_baseline_qual_bins %}<tr><td>{{ k }}</td><td class="n">{{ "{:,}".format(v) }}</td></tr>{% endfor %}</table>
+<table><tr><th>Baseline depth</th><th>Variants</th></tr>{% for k, v in s.missing_baseline_dp_bins %}<tr><td>{{ k }}</td><td class="n">{{ "{:,}".format(v) }}</td></tr>{% endfor %}</table>
+<table><tr><th>Chromosome</th><th>Missing</th></tr>{% for k, v in s.missing_by_chrom.items() %}<tr><td>{{ k }}</td><td class="n">{{ "{:,}".format(v) }}</td></tr>{% endfor %}</table>
+
+{% for st, rows in examples.items() if rows %}
+<h2>{{ s.status_labels[st] }} (first {{ rows|length }})</h2>
+<table><tr><th>Variant</th><th>Type</th><th>Baseline GT / QUAL / DP / AD / VAF / GQ / FILTER</th><th>Ours GT / QUAL / DP / AD / VAF / GQ / FILTER</th><th>Nearby in ours</th></tr>
+{% for r in rows %}<tr><td><code>{{ r.CHROM }}:{{ r.POS }} {{ r.REF }}&gt;{{ r.ALT }}</code></td><td>{{ r.TYPE }}</td>
+<td style="font-size:.75rem">{{ r.B_GT }} / {{ r.B_QUAL }} / {{ r.B_DP }} / {{ r.B_AD_REF }},{{ r.B_AD_ALT }} / {{ r.B_VAF }} / {{ r.B_GQ }} / {{ r.B_FILTER }}</td>
+<td style="font-size:.75rem">{% if r.Q_GT %}{{ r.Q_GT }} / {{ r.Q_QUAL }} / {{ r.Q_DP }} / {{ r.Q_AD_REF }},{{ r.Q_AD_ALT }} / {{ r.Q_VAF }} / {{ r.Q_GQ }} / {{ r.Q_FILTER }}{% else %}—{% endif %}</td>
+<td style="font-size:.75rem">{{ r.NEARBY }}</td></tr>{% endfor %}</table>
+{% endfor %}
+<p style="font-size:.8rem">Full table, one row per baseline variant: <code>{{ file_prefix }}.variant_check.tsv.gz</code>. Our PASS variants absent from the baseline: <code>{{ file_prefix }}.ours_pass_not_in_baseline.tsv.gz</code>.</p>
+</body></html>

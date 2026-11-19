@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>{{ summary.title }}</title>{% include "reports/_style.html" %}</head>
+<body>
+{% set S = summary %}
+<h1>{{ S.title }}</h1>
+<p>Run <code>{{ run_id }}</code> · sample <strong>{{ sample }}</strong> · reference <strong>{{ reference }}</strong> · generated {{ generated_at }}</p>
+<p class="note"><strong>Research use only.</strong> Agreement between callers or with an external provider is <em>not</em>
+accuracy: two pipelines can agree on the same error. Accuracy (precision / sensitivity) needs a truth set
+(e.g. GIAB) — see the truth-set section{% if not S.vcfeval.truth %} (no truth set was supplied for this run){% endif %}.</p>
+{% include "reports/_limitations.html" %}
+
+<h2>Inputs</h2>
+<table><tr><th>Set</th><th>Origin</th><th>Source VCF</th></tr>
+{% for i in S.inputs %}<tr><td><strong>{{ i.label }}</strong></td><td>{{ origin_labels.get(i.origin, i.origin) }}</td><td><code>{{ i.source }}</code></td></tr>{% endfor %}</table>
+<p style="font-size:.8rem">Each VCF was split into one record per ALT allele, complex/MNP alleles decomposed into SNVs/indels, indels
+left-aligned against the reference{% if S.regions %}, and restricted to <code>{{ S.regions }}</code>{% endif %}. Compared:
+{{ 'PASS records only' if S.pass_only else 'all records (FILTER ignored)' }}; records whose genotype has no ALT allele are not variants.</p>
+
+<h2>Per set</h2>
+<table><tr><th>Set</th><th>Variants</th><th>SNVs</th><th>Indels</th><th>Het</th><th>Hom-alt</th><th>Hemizygous</th><th>Multi-allelic sites (raw)</th><th>Unique to this set</th><th>Not used (reason: count)</th></tr>
+{% for n in S.sets %}{% set p = S.per_set[n] %}
+<tr><td><strong>{{ n }}</strong></td><td class="n">{{ "{:,}".format(p.total) }}</td><td class="n">{{ "{:,}".format(p.snv) }}</td><td class="n">{{ "{:,}".format(p.indel) }}</td>
+<td class="n">{{ "{:,}".format(p.het) }}</td><td class="n">{{ "{:,}".format(p.hom) }}</td><td class="n">{{ p.hemi }}</td><td class="n">{{ p.multiallelic_raw if p.multiallelic_raw is defined else '—' }}</td>
+<td class="n">{{ "{:,}".format(p.unique) }}</td><td style="font-size:.75rem">{% for k, v in p.not_used.items() %}{{ k }}: {{ "{:,}".format(v) }}{% if not loop.last %}; {% endif %}{% endfor %}</td></tr>{% endfor %}
+</table>
+
+<h2>Concordance matrix (intersections)</h2>
+<p>{{ "{:,}".format(S.union) }} distinct variants; <strong>{{ "{:,}".format(S.in_all) }}</strong> ({{ '%.1f'|format(100 * S.in_all / S.union) if S.union else 0 }} %) found by all sets.
+Each row is one exact combination of sets (UpSet-style).</p>
+{% set maxv = (S.intersections|map(attribute='total')|max) if S.intersections else 1 %}
+<table><tr>{% for n in S.sets %}<th style="text-align:center">{{ n }}</th>{% endfor %}<th>Variants</th><th></th><th>SNVs</th><th>Indels</th></tr>
+{% for r in S.intersections %}<tr>{% for n in S.sets %}<td style="text-align:center">{{ '●' if n in r.sets else '' }}</td>{% endfor %}
+<td class="n">{{ "{:,}".format(r.total) }}</td><td style="width:30%"><span class="bar" style="width:{{ (100 * r.total / maxv)|round(1) }}%"></span></td>
+<td class="n">{{ "{:,}".format(r.snv) }}</td><td class="n">{{ "{:,}".format(r.indel) }}</td></tr>{% endfor %}
+</table>
+
+<h2>Pairwise (normalised allele matching)</h2>
+<table><tr><th>A</th><th>B</th><th>Shared (same allele)</th><th>A only</th><th>B only</th><th>Jaccard</th><th>Same genotype</th><th>Different genotype</th><th>Genotype concordance</th></tr>
+{% for p in S.pairwise %}<tr><td>{{ p.a }}</td><td>{{ p.b }}</td><td class="n">{{ "{:,}".format(p.shared) }}</td><td class="n">{{ "{:,}".format(p.a_only) }}</td><td class="n">{{ "{:,}".format(p.b_only) }}</td>
+<td class="n">{{ p.jaccard }}</td><td class="n">{{ "{:,}".format(p.gt_concordant) }}</td><td class="n">{{ "{:,}".format(p.gt_discordant) }}</td><td class="n">{{ p.gt_concordance_pct }} %</td></tr>{% endfor %}
+</table>
+<p style="font-size:.8rem"><strong>Allele concordance</strong> = same CHROM/POS/REF/ALT after normalisation. <strong>Genotype concordance</strong> =
+of those, the fraction with the same genotype (0/1 vs 1/1). Discordant genotypes are listed in <code>discordant_genotypes.tsv</code>.</p>
+
+{% if S.vcfeval.pairwise %}
+<h2>Haplotype-aware comparison (RTG vcfeval)</h2>
+<p style="font-size:.85rem">vcfeval replays both call sets onto the reference and compares the resulting haplotypes, so equivalent
+but differently written variants match. "A matched" counts A's variants found in B. <em>Representation-only</em> = matches found by
+vcfeval but not by exact allele matching (the same variant written differently).</p>
+<table><tr><th>A (baseline)</th><th>B (calls)</th><th>Match</th><th>A matched</th><th>B matched</th><th>B not in A</th><th>A not in B</th><th>B vs A: "precision"</th><th>"sensitivity"</th><th>F</th><th>Representation-only</th></tr>
+{% for r in S.vcfeval.pairwise %}{% for mode in ('genotype', 'allele') %}{% set m = r[mode] %}{% if m %}
+<tr><td>{{ r.a }}</td><td>{{ r.b }}</td><td>{{ 'genotype + allele' if mode == 'genotype' else 'allele only' }}</td><td class="n">{{ "{:,}".format(m.tp_baseline) }}</td><td class="n">{{ "{:,}".format(m.tp_call) }}</td>
+<td class="n">{{ "{:,}".format(m.fp) }}</td><td class="n">{{ "{:,}".format(m.fn) }}</td><td class="n">{{ m.precision }}</td><td class="n">{{ m.sensitivity }}</td><td class="n">{{ m.f_measure }}</td>
+<td class="n">{{ r.representation_only if mode == 'allele' else '' }}</td></tr>{% endif %}{% endfor %}{% endfor %}
+</table>
+<p style="font-size:.8rem">Between two pipelines these are <em>agreement</em> metrics, not accuracy.</p>
+{% endif %}
+
+<h2>Truth-set benchmark</h2>
+{% if S.vcfeval.truth %}
+<table><tr><th>Set</th><th>Class</th><th>TP</th><th>FP</th><th>FN</th><th>Precision</th><th>Sensitivity (recall)</th><th>F1</th></tr>
+{% for r in S.vcfeval.truth %}{% for c, lab in (('overall','All'),('snp','SNVs'),('non_snp','Indels/other')) %}{% set m = r[c] %}{% if m %}
+<tr><td>{{ r.set }}</td><td>{{ lab }}</td><td class="n">{{ "{:,}".format(m.tp_call) }}</td><td class="n">{{ "{:,}".format(m.fp) }}</td><td class="n">{{ "{:,}".format(m.fn) }}</td>
+<td class="n">{{ m.precision }}</td><td class="n">{{ m.sensitivity }}</td><td class="n">{{ m.f_measure }}</td></tr>{% endif %}{% endfor %}{% endfor %}
+</table>
+<p style="font-size:.8rem">Precision = TP/(TP+FP): how many calls are real. Sensitivity = TP/(TP+FN): how many real variants were found.
+F1 = their harmonic mean. Only meaningful inside the truth set's confident regions.</p>
+{% else %}<p>No truth set supplied. Register a truth VCF (role <em>Truth VCF</em>) and its confident-regions BED for the
+sample (e.g. GIAB HG001/HG002 sequenced in-house) to measure precision and sensitivity.</p>{% endif %}
+
+<h2>Files</h2>
+<ul>{% for k, v in files.items() %}<li>{{ k }}: <code>{{ v }}</code></li>{% endfor %}</ul>
+</body></html>

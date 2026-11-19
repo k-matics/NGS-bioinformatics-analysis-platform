@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en"><head><meta charset="utf-8"><title>BAM comparison {{ sample }}</title>{% include "reports/_style.html" %}</head>
+<body>
+<h1>BAM vs BAM comparison — {{ sample }}</h1>
+<p>Run <code>{{ run_id }}</code> · reference <strong>{{ reference }}</strong> · generated {{ generated_at }}</p>
+<p class="note">All BAMs were measured with identical tools, settings and regions ({{ s.coverage_region }}; duplicates, QC-fail and
+low-MAPQ reads excluded from coverage). A difference is a <em>finding to explain</em> (aligner, reference version, ALT handling,
+trimming, duplicate marking), not automatically an error.</p>
+{% include "reports/_limitations.html" %}
+<h2>BAMs</h2>
+<table><tr><th>Label</th><th>Origin</th><th>Build check</th><th>Path</th></tr>
+{% for b in s.bams %}<tr><td><strong>{{ b.label }}</strong></td><td>{{ origin_labels.get(b.origin, b.origin) }}</td><td>{{ b.build }} ({{ b.verdict }})</td><td><code>{{ b.source }}</code></td></tr>{% endfor %}</table>
+<h2>Metrics</h2>
+<table><tr><th>Metric</th>{% for l in labels %}<th>{{ l }}</th>{% endfor %}{% if labels|length == 2 %}<th>Difference (B − A)</th>{% endif %}</tr>
+{% for r in s.table %}<tr><td>{{ r.metric }}</td>{% for l in labels %}{% set v = r[l] %}<td class="n">{{ "{:,}".format(v) if v is number and v is not float else (v if v is not none else '—') }}</td>{% endfor %}
+{% if labels|length == 2 %}{% set a = r[labels[0]] %}{% set b = r[labels[1]] %}<td class="n">{% if a is number and b is number %}{{ '%+.4g'|format(b - a) }}{% if a %} ({{ '%+.1f'|format(100 * (b - a) / a) }} %){% endif %}{% endif %}</td>{% endif %}</tr>{% endfor %}
+</table>
+<h2>Targets covered differently (mean depth ≥ {{ s.target_diff.threshold }}x in only one BAM)</h2>
+<p>{{ "{:,}".format(s.target_diff.targets_compared) }} targets compared. Reach {{ s.target_diff.threshold }}x only in
+<strong>{{ s.target_diff.a }}</strong>: {{ "{:,}".format(s.target_diff.covered_only_a) }} · only in
+<strong>{{ s.target_diff.b }}</strong>: {{ "{:,}".format(s.target_diff.covered_only_b) }}.</p>
+{% if s.target_diff.by_chrom %}<p>By chromosome: {% for c, n in s.target_diff.by_chrom.items() %}{{ c }} {{ n }}{% if not loop.last %}, {% endif %}{% endfor %}</p>{% endif %}
+{% if top_diffs %}<details><summary>First {{ top_diffs|length }} targets (full list in the CSV)</summary>
+<table><tr><th>Target</th><th>{{ s.target_diff.a }} mean depth</th><th>{{ s.target_diff.b }} mean depth</th></tr>
+{% for r in top_diffs %}<tr><td><code>{{ r.chrom }}:{{ r.start + 1 }}-{{ r.end }}</code></td><td class="n">{{ r[s.target_diff.a] }}</td><td class="n">{{ r[s.target_diff.b] }}</td></tr>{% endfor %}</table></details>{% endif %}
+<h2>Files</h2><ul>{% for k, v in files.items() %}<li>{{ k }}: <code>{{ v }}</code></li>{% endfor %}</ul>
+<p style="font-size:.8rem">Original QC outputs (flagstat JSON, samtools stats, idxstats, mosdepth) are preserved per BAM under <code>qc/compare/&lt;label&gt;/</code>.</p>
+</body></html>
