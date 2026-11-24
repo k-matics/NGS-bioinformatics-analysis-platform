@@ -1,0 +1,73 @@
+{% extends "base.html" %}
+{% from "partials/macros.html" import status_badge with context %}
+{% block title %}Remove {{ run.run_id }}{% endblock %}
+{% block content %}
+<h1 class="h4 mb-1"><i class="bi bi-trash"></i> Remove run {{ run.run_id }} {{ status_badge(run.status) }}</h1>
+<div class="text-secondary mb-3">{{ run.workflow_type }} v{{ run.workflow_version }} · sample
+  <a href="{{ url_for('samples.detail', sample_id=run.sample.sample_id) }}">{{ run.sample.sample_id }}</a> ·
+  created {{ run.created_at|dt }}</div>
+
+{% for b in plan.blockers %}<div class="alert alert-danger">{{ b }}</div>{% endfor %}
+
+<div class="card mb-3"><div class="card-body small">
+  <h2 class="h6">What this run has</h2>
+  <dl class="row mb-0">
+    <dt class="col-sm-3">Database records</dt>
+    <dd class="col-sm-9">1 run, {{ plan.steps }} steps, {{ plan.commands }} command records, {{ plan.events }} events</dd>
+    <dt class="col-sm-3">Output folder</dt>
+    <dd class="col-sm-9"><code>{{ plan.folder }}</code><br>
+      {% if plan.folder_exists %}{{ plan.files }} files, {{ plan.bytes|filesize }}{% if plan.symlinks %}, {{ plan.symlinks }} symbolic link(s) (only the links are removed, never what they point to){% endif %}
+      {% else %}<span class="text-secondary">folder does not exist any more</span>{% endif %}</dd>
+    <dt class="col-sm-3">Registered to the sample</dt>
+    <dd class="col-sm-9">{% for f in plan.registered %}<div><span class="badge text-bg-secondary">{{ f.role }}</span> {{ f.label or f.path.split('/')[-1] }}</div>{% else %}<span class="text-secondary">none</span>{% endfor %}</dd>
+  </dl>
+</div></div>
+
+{% if plan.dependents %}
+<div class="alert alert-warning small">
+  <b>Other runs use output files of this run as input:</b>
+  <ul class="mb-1">{% for other, used in plan.dependents %}
+    <li><a href="{{ url_for('workflows.detail', run_id=other.run_id) }}">{{ other.run_id }}</a> ({{ other.workflow_type }}) uses
+      {% for f in used %}{{ f.label or f.path.split('/')[-1] }}{% if not loop.last %}, {% endif %}{% endfor %}</li>
+  {% endfor %}</ul>
+  Output files can only be deleted after those runs are removed. Removing just the record is still possible.
+</div>
+{% endif %}
+
+{% if not plan.blockers %}
+<form method="post" class="card"><div class="card-body">
+  <h2 class="h6">Do you also want to delete the output files?</h2>
+  <div class="form-check mb-2">
+    <input class="form-check-input" type="radio" name="mode" id="m-outputs" value="outputs"
+           {% if plan.output_blockers %}disabled{% else %}checked{% endif %}>
+    <label class="form-check-label" for="m-outputs"><b>Yes — delete the run record and its output folder</b>
+      <div class="small text-secondary">Removes the run from the database and from the sample, and deletes
+        <code>{{ plan.folder }}</code>{% if plan.folder_exists %} ({{ plan.bytes|filesize }}){% endif %}. This cannot be undone.</div>
+      {% for b in plan.output_blockers %}<div class="small text-danger">{{ b }}</div>{% endfor %}
+    </label>
+  </div>
+  <div class="form-check mb-3">
+    <input class="form-check-input" type="radio" name="mode" id="m-records" value="records"
+           {% if plan.output_blockers %}checked{% endif %}>
+    <label class="form-check-label" for="m-records"><b>No — delete only the run record, keep the files</b>
+      <div class="small text-secondary">The run disappears from the platform; its folder and registered files stay on disk.</div>
+    </label>
+  </div>
+  <div id="typed-box" class="mb-3" {% if plan.output_blockers %}hidden{% endif %}>
+    <label class="form-label small" for="typed_run_id">To delete the files, type the run ID <code>{{ run.run_id }}</code></label>
+    <input class="form-control form-control-sm" style="max-width:22rem" name="typed_run_id" id="typed_run_id" autocomplete="off">
+  </div>
+  <div class="form-check mb-3">
+    <input class="form-check-input" type="checkbox" name="confirm" value="yes" id="confirm" required>
+    <label class="form-check-label" for="confirm">I understand that this removal is permanent (it is recorded in logs/deletions.jsonl).</label>
+  </div>
+  <button class="btn btn-danger"><i class="bi bi-trash"></i> Remove</button>
+  <a class="btn btn-outline-secondary" href="{{ url_for('workflows.detail', run_id=run.run_id) }}">Cancel</a>
+</div></form>
+<script>
+document.querySelectorAll('input[name=mode]').forEach((r) => r.addEventListener('change', () => {
+  document.getElementById('typed-box').hidden = !document.getElementById('m-outputs').checked;
+}));
+</script>
+{% endif %}
+{% endblock %}

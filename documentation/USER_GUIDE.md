@@ -38,6 +38,25 @@ You are taken to the run page.
 Estimated remaining time is deliberately not shown yet — it will appear once enough run history exists
 to estimate it reliably.
 
+### Removing a run
+**Remove run** (run page) or the bin icon (Workflows list) appears for finished runs only
+(completed, failed, cancelled). A running run must be cancelled first. The confirmation page shows
+the database records, the output folder (file count and size), and the files the run registered to
+the sample. It then asks whether you also want to delete the output files:
+
+* **Yes — record and output folder:** the run is removed from the database and from the sample,
+  and its folder in the results directory is deleted. To confirm, you type the run ID.
+  Symbolic links inside the folder (for example to an external BAM) are removed as links; the
+  files they point to are never touched.
+* **No — record only:** the run disappears from the platform, but its folder and registered files
+  stay on disk.
+
+Output files cannot be deleted while another run uses one of them as input (for example a
+variant check that used the run's VCF). The page lists those runs: remove them first, or remove
+only the record. Only a folder inside the results directory and named after the run ID can be
+deleted. Every removal is appended to `logs/deletions.jsonl` (time, user, run, mode, files and
+bytes removed), so the deletion itself stays traceable.
+
 ## 6. Intake results
 On the sample page each file now shows its **SHA-256**, **detected build** and **validation status**:
 

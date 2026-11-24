@@ -9,6 +9,7 @@ from ..models import status as S
 from ..services.file_service import safe_child
 from ..services.limitations import run_limitations
 from ..services.report_service import run_reports
+from ..services.run_delete import DeleteError, delete_run, deletion_plan
 from ..services.workflow_service import (
     WorkflowError,
     request_cancel,
@@ -46,6 +47,37 @@ def detail(run_id):
         definition = None
     return render_template("workflows/detail.html", run=run, definition=definition,
         reports=run_reports(run), limitations=run_limitations(run.reference, run.params, run.sample))
+
+
+@bp.route("/<run_id>/remove", methods=["GET", "POST"])
+def remove(run_id):
+    """Confirmation page (GET) and removal (POST) of a finished run."""
+    run = _get_run(run_id)
+    if request.method == "GET":
+        return render_template("workflows/remove.html", run=run, plan=deletion_plan(run))
+    mode = request.form.get("mode", "")
+    if request.form.get("confirm") != "yes":
+        flash("Tick the confirmation box to remove the run.", "warning")
+        return redirect(url_for("workflows.remove", run_id=run_id))
+    if mode == "outputs" and request.form.get("typed_run_id", "").strip() != run.run_id:
+        flash("To delete the output files, type the run ID exactly.", "warning")
+        return redirect(url_for("workflows.remove", run_id=run_id))
+    try:
+        entry = delete_run(run, mode)
+    except DeleteError as exc:
+        flash(str(exc), "danger")
+        if WorkflowRun.query.filter_by(run_id=run_id).first() is None:
+            return redirect(url_for("workflows.history"))
+        return redirect(url_for("workflows.remove", run_id=run_id))
+    _VC_CACHE.clear()
+    if mode == "outputs":
+        flash(f"Removed {run_id}: run record and output folder ({entry['files_removed']} files, "
+              f"{entry['bytes_removed'] / 1e9:.2f} GB, {len(entry['unregistered_files'])} registered file(s) "
+              "un-registered). Logged in logs/deletions.jsonl.", "success")
+    else:
+        flash(f"Removed the record of {run_id}. Its files were kept on disk in {entry['output_dir']}. "
+              "Logged in logs/deletions.jsonl.", "success")
+    return redirect(url_for("workflows.history"))
 
 
 @bp.route("/<run_id>/<action>", methods=["POST"])
